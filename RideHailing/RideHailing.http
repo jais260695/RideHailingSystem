@@ -1,0 +1,6 @@
+@RideHailing_HostAddress = http://localhost:5270
+
+GET {{RideHailing_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

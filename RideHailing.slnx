@@ -1,1 +1,19 @@
-<Solution />
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="docker-compose.yml" />
+  </Folder>
+  <Folder Name="/src/" />
+  <Folder Name="/src/ApiGateway/">
+    <Project Path="src/ApiGateway/RideHailing.ApiGateway/RideHailing.ApiGateway.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/" />
+  <Folder Name="/src/Services/Driver/">
+    <Project Path="src/Services/Driver/RideHailing.DriverService/RideHailing.DriverService.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Rider/">
+    <Project Path="src/Services/Rider/RideHailing.RiderService/RideHailing.RiderService.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Trip/">
+    <Project Path="src/Services/Trip/RideHailing.TripService/RideHailing.TripService.csproj" />
+  </Folder>
+</Solution>

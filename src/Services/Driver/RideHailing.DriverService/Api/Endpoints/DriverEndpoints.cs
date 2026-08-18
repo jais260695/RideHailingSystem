@@ -1,86 +1,368 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
+using RideHailing.DriverService.Domain.Entities;
 using RideHailing.DriverService.Infrastructure.Persistence;
 
-namespace RideHailing.DriverService.Api.Endpoints
-{
-    public class DriverEndpoints
-    {
-    }
-}
-
-
-
-
-
+namespace RideHailing.DriverService.Api.Endpoints;
 
 public static class DriverEndpoints
 {
-    public static IEndpointRouteBuilder MapRiderEndpoints(this IEndpointRouteBuilder endpoints)
+    public static IEndpointRouteBuilder MapDriverEndpoints(
+        this IEndpointRouteBuilder app)
     {
-        var group = endpoints.MapGroup("/api/riders").WithTags("Riders");
+        var group = app.MapGroup("/api/drivers").WithTags("Drivers");
 
-        group.MapPost("/", async (
-            CreateRiderRequest request,
-            RiderDbContext db,
-            CancellationToken cancellationToken) =>
+        group.MapPost("/", CreateDriverAsync)
+            .WithName("CreateDriver")
+            .WithSummary("Create a new driver")
+            .WithDescription("Creates a new driver. Returns 201 with the created driver or 409 if there are conflicts.")
+            .Produces<DriverResponse>(StatusCodes.Status201Created)
+            .Produces(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status400BadRequest);
+
+        group.MapGet("/{id:guid}", GetDriverAsync)
+            .WithName("GetDriverById")
+            .WithSummary("Get driver by id")
+            .WithDescription("Returns the driver including vehicle if found, otherwise 404.")
+            .Produces<DriverResponse>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound);
+
+        group.MapGet("/", GetDriversAsync)
+            .WithName("GetDrivers")
+            .WithSummary("List drivers")
+            .WithDescription("Returns a list of drivers, ordered by creation date.")
+            .Produces<IEnumerable<DriverResponse>>(StatusCodes.Status200OK);
+
+        group.MapPut("/{id:guid}", UpdateDriverAsync)
+            .WithName("UpdateDriver")
+            .WithSummary("Update a driver's profile")
+            .WithDescription("Updates name and phone number for the specified driver. Returns 200 with updated driver or 404 if not found.")
+            .Produces<DriverResponse>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status409Conflict);
+
+        group.MapPost(
+            "/{id:guid}/suspend",
+            SuspendDriverAsync)
+            .WithName("SuspendDriver")
+            .WithDescription("Suspends a driver by id.")
+            .WithTags("Driver");
+
+        group.MapPost(
+            "/{id:guid}/activate",
+            ActivateDriverAsync)
+            .WithName("ActivateDriver")
+            .WithDescription("Activates a suspended driver by id.")
+            .WithTags("Driver");
+
+        group.MapPost(
+            "/{id:guid}/deactivate",
+            DeactivateDriverAsync)
+            .WithName("DeactivateDriver")
+            .WithDescription("Deactivates an active driver by id.")
+            .WithTags("Driver");
+
+        return app;
+    }
+
+    private static async Task<IResult> CreateDriverAsync(
+        CreateDriverRequest request,
+        DriverDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var emailExists = await db.Drivers
+            .AnyAsync(
+                x => x.Email == request.Email,
+                cancellationToken);
+
+        if (emailExists)
         {
-            var emailExists = await db.Riders
-                .AnyAsync(
-                    x => x.Email == request.Email,
-                    cancellationToken);
+            return Results.Conflict(
+                new
+                {
+                    message =
+                        "A driver with this email already exists."
+                });
+        }
 
-            if (emailExists)
-            {
-                return Results.Conflict(
-                    "A rider with this email already exists.");
-            }
+        var phoneExists = await db.Drivers
+            .AnyAsync(
+                x => x.PhoneNumber == request.PhoneNumber,
+                cancellationToken);
 
-            var rider = new Rider(
-                request.Name,
-                request.Email,
-                request.PhoneNumber);
+        if (phoneExists)
+        {
+            return Results.Conflict(
+                new
+                {
+                    message =
+                        "A driver with this phone already exists."
+                });
+        }
 
-            db.Riders.Add(rider);
+        var licenseExists = await db.Drivers
+            .AnyAsync(
+                x => x.LicenseNumber == request.LicenseNumber,
+                cancellationToken);
+
+        if (licenseExists)
+        {
+            return Results.Conflict(
+                new
+                {
+                    message =
+                        "A driver with this license already exists."
+                });
+        }
+
+        var driver = new Driver(
+            request.Name,
+            request.Email,
+            request.PhoneNumber,
+            request.LicenseNumber);
+
+        db.Drivers.Add(driver);
+
+        await db.SaveChangesAsync(cancellationToken);
+
+        return Results.Created(
+            $"/api/drivers/{driver.Id}",
+            ToResponse(driver));
+    }
+
+    private static async Task<IResult> GetDriverAsync(
+        Guid id,
+        DriverDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var driver = await db.Drivers
+            .AsNoTracking()
+            .Include(x => x.Vehicle)
+            .FirstOrDefaultAsync(
+                x => x.Id == id,
+                cancellationToken);
+
+        return driver is null
+            ? Results.NotFound()
+            : Results.Ok(ToResponse(driver));
+    }
+
+    private static async Task<IResult> GetDriversAsync(
+        DriverDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var drivers = await db.Drivers
+            .AsNoTracking()
+            .Include(x => x.Vehicle)
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .Select(x => ToResponse(x))
+            .ToListAsync(cancellationToken);
+
+        return Results.Ok(drivers);
+    }
+
+    private static async Task<IResult> UpdateDriverAsync(
+        Guid id,
+        UpdateDriverRequest request,
+        DriverDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var driver = await db.Drivers
+            .FirstOrDefaultAsync(
+                x => x.Id == id,
+                cancellationToken);
+
+        if (driver is null)
+        {
+            return Results.NotFound();
+        }
+
+        var phoneExists = await db.Drivers
+            .AnyAsync(
+                x => x.PhoneNumber == request.PhoneNumber
+                     && x.Id != id,
+                cancellationToken);
+
+        if (phoneExists)
+        {
+            return Results.Conflict(
+                new
+                {
+                    message =
+                        "A driver with this phone already exists."
+                });
+        }
+
+        driver.UpdateProfile(
+            request.Name,
+            request.PhoneNumber);
+
+        await db.SaveChangesAsync(cancellationToken);
+
+        return Results.Ok(ToResponse(driver));
+    }
+
+    private static async Task<IResult> SuspendDriverAsync(
+        Guid id,
+        DriverDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var driver = await db.Drivers
+            .FirstOrDefaultAsync(
+                x => x.Id == id,
+                cancellationToken);
+
+        if (driver is null)
+        {
+            return Results.NotFound();
+        }
+
+        try
+        {
+            driver.Suspend();
 
             await db.SaveChangesAsync(cancellationToken);
 
-            return Results.Created(
-                $"/api/riders/{rider.Id}",
-                rider);
-        })
-        .WithName("CreateRider")
-        .WithSummary("Create a new rider")
-        .WithDescription("Creates a new rider. Returns 201 with the created rider or 409 if the email already exists.")
-        .Produces<Rider>(StatusCodes.Status201Created)
-        .Produces(StatusCodes.Status409Conflict)
-        .ProducesProblem(StatusCodes.Status400BadRequest); ;
-
-        group.MapGet("/{id:guid}", async (
-            Guid id,
-            RiderDbContext db,
-            CancellationToken cancellationToken) =>
+            return Results.Ok();
+        }
+        catch (InvalidOperationException ex)
         {
-            var rider = await db.Riders
-                .AsNoTracking()
-                .FirstOrDefaultAsync(
-                    x => x.Id == id,
-                    cancellationToken);
-
-            return rider is null
-                ? Results.NotFound()
-                : Results.Ok(rider);
-        })
-        .WithName("GetRider")
-        .WithSummary("Get a rider by ID")
-        .WithDescription("Retrieves a rider by their ID.")
-        .Produces<Rider>(StatusCodes.Status200OK)
-        .Produces(StatusCodes.Status404NotFound);
-
-        return endpoints;
+            return Results.Conflict(new
+            {
+                message = ex.Message
+            });
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Results.Conflict(new
+            {
+                message =
+                    "Driver was modified by another request. Please retry."
+            });
+        }
     }
 
-    private sealed record CreateRiderRequest(
+    private static async Task<IResult> ActivateDriverAsync(
+        Guid id,
+        DriverDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var driver = await db.Drivers
+            .FirstOrDefaultAsync(
+                x => x.Id == id,
+                cancellationToken);
+
+        if (driver is null)
+        {
+            return Results.NotFound();
+        }
+
+        try
+        {
+            driver.Activate();
+
+            await db.SaveChangesAsync(cancellationToken);
+
+            return Results.Ok();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.Conflict(new
+            {
+                message = ex.Message
+            });
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Results.Conflict(new
+            {
+                message =
+                    "Driver was modified by another request. Please retry."
+            });
+        }
+    }
+
+    private static async Task<IResult> DeactivateDriverAsync(
+        Guid id,
+        DriverDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var driver = await db.Drivers
+            .FirstOrDefaultAsync(
+                x => x.Id == id,
+                cancellationToken);
+
+        if (driver is null)
+        {
+            return Results.NotFound();
+        }
+
+        driver.Deactivate();
+
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+
+            return Results.Ok();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Results.Conflict(new
+            {
+                message =
+                    "Driver was modified by another request. Please retry."
+            });
+        }
+    }
+
+    private static DriverResponse ToResponse(
+        Driver driver)
+    {
+        return new DriverResponse(
+            driver.Id,
+            driver.Name,
+            driver.Email,
+            driver.PhoneNumber,
+            driver.LicenseNumber,
+            driver.Rating,
+            driver.CreatedAtUtc,
+            driver.Vehicle is null
+                ? null
+                : new VehicleResponse(
+                    driver.Vehicle.Id,
+                    driver.Vehicle.Make,
+                    driver.Vehicle.Model,
+                    driver.Vehicle.Color,
+                    driver.Vehicle.LicensePlate,
+                    driver.Vehicle.ManufacturingYear));
+    }
+
+    private sealed record CreateDriverRequest(
         string Name,
         string Email,
+        string PhoneNumber,
+        string LicenseNumber);
+
+    private sealed record UpdateDriverRequest(
+        string Name,
         string PhoneNumber);
+
+    private sealed record DriverResponse(
+        Guid Id,
+        string Name,
+        string Email,
+        string PhoneNumber,
+        string LicenseNumber,
+        decimal Rating,
+        DateTime CreatedAtUtc,
+        VehicleResponse? Vehicle);
+
+    private sealed record VehicleResponse(
+        Guid Id,
+        string Make,
+        string Model,
+        string Color,
+        string LicensePlate,
+        int ManufacturingYear);
 }

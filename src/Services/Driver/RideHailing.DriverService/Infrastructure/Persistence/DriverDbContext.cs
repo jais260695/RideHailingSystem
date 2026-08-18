@@ -8,78 +8,103 @@ public sealed class DriverDbContext(
     : DbContext(options)
 {
     public DbSet<Driver> Drivers => Set<Driver>();
+
     public DbSet<Vehicle> Vehicles => Set<Vehicle>();
 
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    protected override void OnModelCreating(
+        ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<Driver>(entity =>
-        {
-            entity.ToTable("drivers");
+        ConfigureDriver(modelBuilder);
+        ConfigureVehicle(modelBuilder);
+    }
 
-            entity.HasKey(x => x.Id);
+    private static void ConfigureDriver(
+        ModelBuilder modelBuilder)
+    {
+        var entity = modelBuilder.Entity<Driver>();
 
-            entity.Property(x => x.Name)
-                .HasMaxLength(150)
-                .IsRequired();
+        entity.ToTable("drivers");
 
-            entity.Property(x => x.Email)
-                .HasMaxLength(320)
-                .IsRequired();
+        entity.HasKey(x => x.Id);
 
-            entity.Property(x => x.PhoneNumber)
-                .HasMaxLength(20)
-                .IsRequired();
+        entity.Property(x => x.Name)
+            .HasMaxLength(150)
+            .IsRequired();
 
-            entity.Property(x => x.LicenseNumber)
-                .HasMaxLength(50)
-                .IsRequired();
+        entity.Property(x => x.Email)
+            .HasMaxLength(320)
+            .IsRequired();
 
-            entity.Property(x => x.Rating)
-                .HasPrecision(3, 2)
-                .IsRequired();
+        entity.Property(x => x.PhoneNumber)
+            .HasMaxLength(20)
+            .IsRequired();
 
-            entity.Property(x => x.CreatedAtUtc)
-                .IsRequired();
+        entity.Property(x => x.LicenseNumber)
+            .HasMaxLength(50)
+            .IsRequired();
 
-            entity.HasIndex(x => x.Email)
-                .IsUnique();
+        entity.Property(x => x.Rating)
+            .HasPrecision(3, 2)
+            .IsRequired();
 
-            entity.HasIndex(x => x.PhoneNumber)
-                .IsUnique();
+        entity.Property(x => x.CreatedAtUtc)
+            .IsRequired();
 
-            entity.HasIndex(x => x.LicenseNumber)
-                .IsUnique();
+        entity.HasIndex(x => x.Email)
+            .IsUnique();
 
-            entity.HasOne(x => x.Vehicle)
-                .WithOne()
-                .HasForeignKey<Vehicle>(x => x.DriverId)
-                .OnDelete(DeleteBehavior.Cascade);
-        });
+        entity.HasIndex(x => x.PhoneNumber)
+            .IsUnique();
 
-        modelBuilder.Entity<Vehicle>(entity =>
-        {
-            entity.ToTable("vehicles");
+        entity.HasIndex(x => x.LicenseNumber)
+            .IsUnique();
 
-            entity.HasKey(x => x.Id);
+        entity.Property(x => x.Version)
+            .HasColumnName("xmin")
+            .IsRowVersion();
 
-            entity.Property(x => x.Make)
-                .HasMaxLength(100)
-                .IsRequired();
+        entity.Property(x => x.Status)
+            .IsRequired();
 
-            entity.Property(x => x.Model)
-                .HasMaxLength(100)
-                .IsRequired();
+        entity.HasOne(x => x.Vehicle)
+            .WithOne()
+            .HasForeignKey<Vehicle>(
+                x => x.DriverId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
 
-            entity.Property(x => x.Color)
-                .HasMaxLength(50)
-                .IsRequired();
+    private static void ConfigureVehicle(
+        ModelBuilder modelBuilder)
+    {
+        var entity = modelBuilder.Entity<Vehicle>();
 
-            entity.Property(x => x.LicensePlate)
-                .HasMaxLength(30)
-                .IsRequired();
+        entity.ToTable("vehicles");
 
-            entity.HasIndex(x => x.LicensePlate)
-                .IsUnique();
-        });
+        entity.HasKey(x => x.Id);
+
+        entity.Property(x => x.Make)
+            .HasMaxLength(100)
+            .IsRequired();
+
+        entity.Property(x => x.Model)
+            .HasMaxLength(100)
+            .IsRequired();
+
+        entity.Property(x => x.Color)
+            .HasMaxLength(50)
+            .IsRequired();
+
+        entity.Property(x => x.LicensePlate)
+            .HasMaxLength(30)
+            .IsRequired();
+
+        entity.Property(x => x.ManufacturingYear)
+            .IsRequired();
+
+        entity.HasIndex(x => x.LicensePlate)
+            .IsUnique();
+
+        entity.HasIndex(x => x.DriverId)
+            .IsUnique();
     }
 }

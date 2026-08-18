@@ -29,11 +29,22 @@ public sealed class Vehicle
         int manufacturingYear)
     {
         Id = Guid.NewGuid();
+
         DriverId = driverId;
         Make = make;
         Model = model;
         Color = color;
         LicensePlate = licensePlate;
         ManufacturingYear = manufacturingYear;
+    }
+
+    public void Update(
+        string make,
+        string model,
+        string color)
+    {
+        Make = make;
+        Model = model;
+        Color = color;
     }
 }

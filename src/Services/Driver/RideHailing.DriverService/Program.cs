@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using RideHailing.DriverService.Api.Endpoints;
 using RideHailing.DriverService.Infrastructure.Persistence;
 using RideHailing.DriverService.Infrastructure.Redis;
 using StackExchange.Redis;
@@ -31,6 +32,14 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.MapGet("/", () => "RideHailing Driver Service");
+app.MapDriverEndpoints();
+app.MapVehicleEndpoints();
+
+app.MapGet(
+    "/health",
+    () => Results.Ok(new
+    {
+        status = "healthy"
+    }));
 
 app.Run();

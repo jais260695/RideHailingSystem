@@ -1,7 +1,9 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using RideHailing.DriverService.Contracts.Events;
 using RideHailing.DriverService.Domain.Entities;
 using RideHailing.DriverService.Infrastructure.Persistence;
+using System.Text.Json;
 
 namespace RideHailing.DriverService.Api.Endpoints;
 
@@ -222,6 +224,20 @@ public static class DriverEndpoints
         {
             driver.Suspend();
 
+            var eventId = Guid.NewGuid();
+            var @event = new DriverSuspendedEvent(
+                                    eventId,
+                                    driver.Id,
+                                    DateTime.UtcNow
+                                );
+
+            var outboxMessage = new OutboxMessage(
+                                    nameof(DriverSuspendedEvent),
+                                    JsonSerializer.Serialize(@event)
+                                   );
+
+            db.OutboxMessages.Add(outboxMessage);
+
             await db.SaveChangesAsync(cancellationToken);
 
             return Results.Ok();
@@ -261,6 +277,19 @@ public static class DriverEndpoints
         try
         {
             driver.Activate();
+
+            var eventId = Guid.NewGuid();
+            var @event = new DriverActivatedEvent(
+                                    eventId,
+                                    driver.Id,
+                                    DateTime.UtcNow
+                                );
+            var outboxMessage = new OutboxMessage(
+                                    nameof(DriverActivatedEvent),
+                                    JsonSerializer.Serialize(@event)
+                                   );
+
+            db.OutboxMessages.Add(outboxMessage);
 
             await db.SaveChangesAsync(cancellationToken);
 
@@ -302,6 +331,19 @@ public static class DriverEndpoints
 
         try
         {
+            var eventId = Guid.NewGuid();
+            var @event = new DriverDeactivatedEvent(
+                                    eventId,
+                                    driver.Id,
+                                    DateTime.UtcNow
+                                );
+            var outboxMessage = new OutboxMessage(
+                                    nameof(DriverDeactivatedEvent),
+                                    JsonSerializer.Serialize(@event)
+                                   );
+
+            db.OutboxMessages.Add(outboxMessage);
+
             await db.SaveChangesAsync(cancellationToken);
 
             return Results.Ok();

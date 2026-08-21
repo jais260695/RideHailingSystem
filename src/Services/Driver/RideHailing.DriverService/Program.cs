@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using RideHailing.DriverService.Api.Endpoints;
+using RideHailing.DriverService.Infrastructure.Messaging;
+using RideHailing.DriverService.Infrastructure.Outbox;
 using RideHailing.DriverService.Infrastructure.Persistence;
 using RideHailing.DriverService.Infrastructure.Redis;
 using StackExchange.Redis;
@@ -23,6 +25,10 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
 });
 
 builder.Services.AddSingleton<DriverLocationStore>();
+
+builder.Services.AddSingleton<IKafkaPublisher, KafkaPublisher>();
+
+builder.Services.AddHostedService<OutboxProcessor>();
 
 var app = builder.Build();
 

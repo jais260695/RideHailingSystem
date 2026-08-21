@@ -11,11 +11,14 @@ public sealed class DriverDbContext(
 
     public DbSet<Vehicle> Vehicles => Set<Vehicle>();
 
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+
     protected override void OnModelCreating(
         ModelBuilder modelBuilder)
     {
         ConfigureDriver(modelBuilder);
         ConfigureVehicle(modelBuilder);
+        ConfigureOutbox(modelBuilder);
     }
 
     private static void ConfigureDriver(
@@ -106,5 +109,34 @@ public sealed class DriverDbContext(
 
         entity.HasIndex(x => x.DriverId)
             .IsUnique();
+    }
+
+    private static void ConfigureOutbox(
+    ModelBuilder modelBuilder)
+    {
+        var entity = modelBuilder.Entity<OutboxMessage>();
+
+        entity.ToTable("outbox_messages");
+
+        entity.HasKey(x => x.Id);
+
+        entity.Property(x => x.Type)
+            .HasMaxLength(200)
+            .IsRequired();
+
+        entity.Property(x => x.Payload)
+            .IsRequired();
+
+        entity.Property(x => x.OccurredAtUtc)
+            .IsRequired();
+
+        entity.Property(x => x.RetryCount)
+            .IsRequired();
+
+        entity.HasIndex(x => new
+        {
+            x.ProcessedAtUtc,
+            x.OccurredAtUtc
+        });
     }
 }

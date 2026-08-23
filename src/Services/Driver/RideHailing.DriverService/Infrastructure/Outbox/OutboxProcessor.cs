@@ -1,11 +1,12 @@
 ﻿using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using RideHailing.DriverService.Domain.Entities;
 using RideHailing.DriverService.Infrastructure.Messaging;
 using RideHailing.DriverService.Infrastructure.Persistence;
 
@@ -38,11 +39,7 @@ public sealed class OutboxProcessor : BackgroundService
             try
             {
                 var processed = await ProcessBatchAsync(stoppingToken);
-
-                if (processed == 0)
-                {
-                    await Task.Delay(TimeSpan.FromSeconds(1), stoppingToken);
-                }
+                if (processed == 0) await Task.Delay(TimeSpan.FromSeconds(1), stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -60,66 +57,84 @@ public sealed class OutboxProcessor : BackgroundService
 
     private async Task<int> ProcessBatchAsync(CancellationToken cancellationToken)
     {
+        var lockId = Guid.NewGuid();
+        var claimedCount = await ClaimMessagesAsync(lockId, cancellationToken);
+        if (claimedCount == 0)
+        {
+            return 0;
+        }
+        await PublishClaimedMessagesAsync(lockId, cancellationToken);
+        return claimedCount;
+    }
+
+    private async Task<int> ClaimMessagesAsync(Guid lockId, CancellationToken cancellationToken)
+    {
         using var scope = _scopeFactory.CreateScope();
-
         var db = scope.ServiceProvider.GetRequiredService<DriverDbContext>();
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
 
-        var messages = await db.OutboxMessages
-            .Where(x => x.ProcessedAtUtc == null)
-            .OrderBy(x => x.OccurredAtUtc)
-            .Take(BatchSize)
-            .ToListAsync(cancellationToken);
+        var now = DateTime.UtcNow;
+        var messages = await db.OutboxMessages.FromSqlInterpolated($"""
+                            SELECT *
+                            FROM outbox_messages
+                            WHERE processed_at_utc IS NULL
+                                AND next_attempt_at_utc <= {now}
+                                AND (locked_until_utc IS NULL OR locked_until_utc < {now})
+                            ORDER BY occurred_at_utc
+                            FOR UPDATE 
+                            SKIP LOCKED
+                            LIMIT {BatchSize}
+                            """
+                       ).ToListAsync(cancellationToken);
 
         foreach (var message in messages)
         {
-            await ProcessMessageAsync(db, message, cancellationToken);
+            message.Claim(lockId, TimeSpan.FromSeconds(60));
         }
-
+        await db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return messages.Count;
     }
 
-    private async Task ProcessMessageAsync(
-        DriverDbContext db,
-        Domain.Entities.OutboxMessage message,
-        CancellationToken cancellationToken)
+    private async Task PublishClaimedMessagesAsync(Guid lockId, CancellationToken cancellationToken)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<DriverDbContext>();
+        var messages = await db.OutboxMessages
+                        .Where(x => x.ProcessedAtUtc == null && x.LockId == lockId)
+                        .OrderBy(x => x.OccurredAtUtc)
+                        .ToListAsync(cancellationToken);
+
+        foreach (var message in messages)
+        {
+            await PublishMessageAsync(db, message, cancellationToken);
+        }
+    }
+
+    private async Task PublishMessageAsync(DriverDbContext db, OutboxMessage message, CancellationToken cancellationToken)
     {
         try
         {
             var topic = GetTopic(message.Type);
-
-            await _kafkaPublisher.PublishAsync(
-                topic,
-                message.Id.ToString(),
-                message.Payload,
-                cancellationToken);
-
+            await _kafkaPublisher.PublishAsync(topic, message.Id.ToString(), message.Payload, cancellationToken);
             message.MarkProcessed();
-
             await db.SaveChangesAsync(cancellationToken);
-
-            _logger.LogInformation(
-                "Published outbox message {MessageId} of type {MessageType}",
-                message.Id,
-                message.Type);
+            _logger.LogInformation("Published outbox message {MessageId}", message.Id);
         }
         catch (Exception ex)
         {
             message.MarkFailed(ex.Message);
-
             await db.SaveChangesAsync(cancellationToken);
-
             _logger.LogError(ex, "Failed to publish outbox message {MessageId}", message.Id);
         }
     }
 
-    private static string GetTopic(string eventType)
-    {
-        return eventType switch
+    private static string GetTopic(string eventType) =>
+        eventType switch
         {
             "DriverSuspendedEvent" => "driver-events",
             "DriverActivatedEvent" => "driver-events",
             "DriverDeactivatedEvent" => "driver-events",
             _ => throw new InvalidOperationException($"Unknown event type: {eventType}")
         };
-    }
 }

@@ -35,7 +35,6 @@ public sealed class Driver
         string licenseNumber)
     {
         Id = Guid.NewGuid();
-
         Name = name;
         Email = email;
         PhoneNumber = phoneNumber;
@@ -46,9 +45,7 @@ public sealed class Driver
         Version = 1;
     }
 
-    public void UpdateProfile(
-        string name,
-        string phoneNumber)
+    public void UpdateProfile(string name, string phoneNumber)
     {
         Name = name;
         PhoneNumber = phoneNumber;
@@ -58,8 +55,7 @@ public sealed class Driver
     {
         if (Vehicle is not null)
         {
-            throw new InvalidOperationException(
-                "Driver already has a vehicle.");
+            throw new InvalidOperationException("Driver already has a vehicle.");
         }
 
         Vehicle = vehicle;
@@ -69,8 +65,7 @@ public sealed class Driver
     {
         if (Status == DriverLifecycleStatus.Deactivated)
         {
-            throw new InvalidOperationException(
-                "A deactivated driver cannot be suspended.");
+            throw new InvalidOperationException("A deactivated driver cannot be suspended.");
         }
 
         Status = DriverLifecycleStatus.Suspended;
@@ -80,8 +75,7 @@ public sealed class Driver
     {
         if (Status == DriverLifecycleStatus.Deactivated)
         {
-            throw new InvalidOperationException(
-                "A deactivated driver cannot be activated.");
+            throw new InvalidOperationException("A deactivated driver cannot be activated.");
         }
 
         Status = DriverLifecycleStatus.Active;

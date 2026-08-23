@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using RideHailing.DriverService.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using RideHailing.DriverService.Infrastructure.Persistence;
 namespace RideHailing.DriverService.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(DriverDbContext))]
-    partial class DriverDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260823114547_AddOutboxRetry")]
+    partial class AddOutboxRetry
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -38,13 +41,13 @@ namespace RideHailing.DriverService.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("LicenseNumber")
                         .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
 
                     b.Property<string>("PhoneNumber")
                         .IsRequired()
@@ -72,6 +75,9 @@ namespace RideHailing.DriverService.Infrastructure.Persistence.Migrations
                     b.HasIndex("LicenseNumber")
                         .IsUnique();
 
+                    b.HasIndex("PhoneNumber")
+                        .IsUnique();
+
                     b.ToTable("drivers", (string)null);
                 });
 
@@ -83,12 +89,6 @@ namespace RideHailing.DriverService.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("Error")
                         .HasColumnType("text");
-
-                    b.Property<Guid?>("LockId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("LockedUntilUtc")
-                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime>("NextAttemptAtUtc")
                         .HasColumnType("timestamp with time zone");
@@ -113,9 +113,7 @@ namespace RideHailing.DriverService.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("LockId");
-
-                    b.HasIndex("NextAttemptAtUtc", "OccurredAtUtc", "LockedUntilUtc");
+                    b.HasIndex("ProcessedAtUtc", "NextAttemptAtUtc", "OccurredAtUtc");
 
                     b.ToTable("outbox_messages", (string)null);
                 });
@@ -128,29 +126,36 @@ namespace RideHailing.DriverService.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("Color")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.Property<Guid>("DriverId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("LicensePlate")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
 
                     b.Property<string>("Make")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<int>("ManufacturingYear")
                         .HasColumnType("integer");
 
                     b.Property<string>("Model")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.HasKey("Id");
 
                     b.HasIndex("DriverId")
+                        .IsUnique();
+
+                    b.HasIndex("LicensePlate")
                         .IsUnique();
 
                     b.ToTable("vehicles", (string)null);

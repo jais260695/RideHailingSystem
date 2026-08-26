@@ -10,6 +10,9 @@
   <Folder Name="/src/Services/Driver/">
     <Project Path="src/Services/Driver/RideHailing.DriverService/RideHailing.DriverService.csproj" />
   </Folder>
+  <Folder Name="/src/Services/Location/">
+    <Project Path="src/Services/Location/RideHailing.LocationService/RideHailing.LocationService.csproj" />
+  </Folder>
   <Folder Name="/src/Services/Rider/">
     <Project Path="src/Services/Rider/RideHailing.RiderService/RideHailing.RiderService.csproj" />
   </Folder>

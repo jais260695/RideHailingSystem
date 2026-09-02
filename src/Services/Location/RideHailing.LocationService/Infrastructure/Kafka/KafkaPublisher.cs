@@ -1,45 +1,19 @@
 ﻿using Confluent.Kafka;
-using RideHailing.LocationService.Application.Events;
-using System.Text.Json;
+using System.Text;
 
 namespace RideHailing.LocationService.Infrastructure.Kafka;
 
-public sealed class KafkaPublisher : IKafkaPublisher
+public sealed class KafkaPublisher(IProducer<string, string> producer) : IKafkaPublisher
 {
-    private readonly IProducer<string, string> _producer;
-
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    public async Task PublishRawAsync(string topic, string key, string eventType, string payload, CancellationToken cancellationToken)
     {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
+        var msg = new Message<string, string>
+        {
+            Key = key,
+            Value = payload,
+            Headers = new Headers { new Header("event-type", Encoding.UTF8.GetBytes(eventType)) }
+        };
 
-    public KafkaPublisher(IProducer<string, string> producer)
-    {
-        _producer = producer;
-    }
-
-    public async Task PublishAsync<T>(
-        string topic,
-        string key,
-        T message,
-        CancellationToken cancellationToken = default)
-        where T : IDriverEvent
-    {
-        var envelope = new DriverEventEnvelope(
-            typeof(T).Name,
-            message.DriverId,
-            message.OccurredAtUtc,
-            message);
-
-        var payload = JsonSerializer.Serialize(envelope, JsonOptions);
-
-        await _producer.ProduceAsync(
-            topic,
-            new Message<string, string>
-            {
-                Key = key,
-                Value = payload
-            },
-            cancellationToken);
+        await producer.ProduceAsync(topic, msg, cancellationToken);
     }
 }

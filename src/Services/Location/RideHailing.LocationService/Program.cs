@@ -1,5 +1,7 @@
+using Confluent.Kafka;
 using RideHailing.LocationService.Application;
 using RideHailing.LocationService.Hubs;
+using RideHailing.LocationService.Infrastructure.Kafka;
 using RideHailing.LocationService.Infrastructure.Redis;
 using RideHailing.LocationService.Security;
 using StackExchange.Redis;
@@ -15,6 +17,24 @@ builder.Services.AddScoped<IDriverIdentity, DriverIdentity>();
 builder.Services.AddSignalR();
 builder.Services.AddAuthentication();
 builder.Services.AddAuthorization();
+
+builder.Services.AddSingleton<IProducer<string, string>>(_ =>
+{
+    var configuration = builder.Configuration;
+    var bootstrapServers = configuration["Kafka:BootstrapServers"]
+                           ?? throw new InvalidOperationException("Kafka:BootstrapServers is not configured.");
+
+    var producerConfig = new ProducerConfig
+    {
+        BootstrapServers = bootstrapServers,
+        Acks = Acks.All,
+        EnableIdempotence = true
+    };
+
+    return new ProducerBuilder<string, string>(producerConfig).Build();
+});
+
+builder.Services.AddSingleton<IKafkaPublisher, KafkaPublisher>();
 
 var app = builder.Build();
 

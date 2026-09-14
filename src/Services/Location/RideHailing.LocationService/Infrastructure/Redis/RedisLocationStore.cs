@@ -14,7 +14,6 @@ public sealed class RedisLocationStore : ILocationStore
     public async Task SetLifecycleStateAsync(Guid driverId, DriverLifecycleState state, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-
         await _database.ScriptEvaluateAsync(
             RedisScripts.SetLifecycle,
             new RedisKey[] { RedisKeys.Lifecycle(driverId), RedisKeys.State(driverId), RedisKeys.AvailableLocations },
@@ -45,7 +44,7 @@ public sealed class RedisLocationStore : ILocationStore
             new RedisValue[] { driverId.ToString(), connectionId, DriverOperationalState.Offline.ToString(), DateTime.UtcNow.ToString("O") });
     }
 
-    public async Task SetAvailableAsync(Guid driverId, CancellationToken cancellationToken)
+    public async Task<DriverOperationalState> SetAvailableAsync(Guid driverId, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -61,44 +60,64 @@ public sealed class RedisLocationStore : ILocationStore
             },
             new RedisValue[] {
                 driverId.ToString(),
-                DriverLifecycleState.Active.ToString(),
-                DriverOperationalState.Busy.ToString(),
-                DriverOperationalState.Offline.ToString(),
-                DriverOperationalState.Available.ToString(),
+                (int)DriverLifecycleState.Active,
+                (int)DriverOperationalState.Busy,
+                (int)DriverOperationalState.Offline,
+                (int)DriverOperationalState.Available,
                 DateTime.UtcNow.ToString("O")
             });
 
-        ThrowForSetAvailableResult(driverId, (long)result);
+        var (resultCode, previousState) = ParseTransitionResult(result);
+        if (resultCode != 1) ThrowForSetAvailableResult(driverId, resultCode);
+        return ParsePreviousState(previousState);
     }
 
-    public async Task SetOfflineAsync(Guid driverId, CancellationToken cancellationToken)
+    public async Task<DriverOperationalState> SetOfflineAsync(Guid driverId, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
         var result = await _database.ScriptEvaluateAsync(
             RedisScripts.SetOffline,
-            new RedisKey[] { RedisKeys.Lifecycle(driverId), RedisKeys.State(driverId), RedisKeys.AvailableLocations },
-            new RedisValue[] { driverId.ToString(), DriverLifecycleState.Active.ToString(), DriverOperationalState.Offline.ToString(), DriverOperationalState.Available.ToString(), DateTime.UtcNow.ToString("O") });
+            new RedisKey[] {
+                RedisKeys.Lifecycle(driverId),
+                RedisKeys.State(driverId),
+                RedisKeys.AvailableLocations
+            },
+            new RedisValue[] {
+                driverId.ToString(),
+                (int)DriverLifecycleState.Active,
+                (int)DriverOperationalState.Offline,
+                (int)DriverOperationalState.Available,
+                DateTime.UtcNow.ToString("O")
+            });
 
-        ThrowForSetOfflineResult(driverId, (long)result);
+        var (resultCode, previousState) = ParseTransitionResult(result);
+        if (resultCode != 1) ThrowForSetOfflineResult(driverId, resultCode);
+        return ParsePreviousState(previousState);
     }
 
-    public async Task SetBusyAsync(Guid driverId, CancellationToken cancellationToken)
+    public async Task<DriverOperationalState> SetBusyAsync(Guid driverId, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
         var result = await _database.ScriptEvaluateAsync(
             RedisScripts.SetBusy,
-            new RedisKey[] { RedisKeys.Lifecycle(driverId), RedisKeys.State(driverId), RedisKeys.AvailableLocations },
+            new RedisKey[] {
+                RedisKeys.Lifecycle(driverId),
+                RedisKeys.State(driverId),
+                RedisKeys.AvailableLocations
+            },
             new RedisValue[] {
                 driverId.ToString(),
-                DriverLifecycleState.Active.ToString(),
-                DriverOperationalState.Available.ToString(),
-                DriverOperationalState.Busy.ToString(),
+                (int)DriverLifecycleState.Active,
+                (int)DriverOperationalState.Available,
+                (int)DriverOperationalState.Busy,
                 DateTime.UtcNow.ToString("O")
             });
 
-        ThrowForSetBusyResult(driverId, (long)result);
+        var (resultCode, previousState) = ParseTransitionResult(result);
+        if (resultCode != 1) ThrowForSetBusyResult(driverId, resultCode);
+        return ParsePreviousState(previousState);
     }
 
     public async Task UpdateLocationAsync(Guid driverId, double latitude, double longitude, CancellationToken cancellationToken)
@@ -221,5 +240,18 @@ public sealed class RedisLocationStore : ILocationStore
     {
         if (latitude is < -90 or > 90) throw new ArgumentOutOfRangeException(nameof(latitude));
         if (longitude is < -180 or > 180) throw new ArgumentOutOfRangeException(nameof(longitude));
+    }
+
+    private static (long Result, long PreviousState) ParseTransitionResult(RedisResult result)
+    {
+        var values = (RedisResult[])result!;
+        return ((long)values[0]!, (long)values[1]!);
+    }
+
+    private static DriverOperationalState ParsePreviousState(long value)
+    {
+        if (!Enum.IsDefined(typeof(DriverOperationalState), (int)value))
+            throw new InvalidOperationException($"Invalid Redis operational state: {value}");
+        return (DriverOperationalState)value;
     }
 }

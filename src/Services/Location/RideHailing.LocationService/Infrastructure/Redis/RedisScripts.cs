@@ -69,25 +69,39 @@ internal static class RedisScripts
         local updatedAt = ARGV[6]
 
         local lifecycle = redis.call('GET', lifecycleKey)
-        if lifecycle ~= expectedLifecycle then return -1 end
+        if lifecycle ~= expectedLifecycle then
+            return {-1, -1}
+        end
 
         local connectionCount = redis.call('SCARD', connectionsKey)
-        if connectionCount == 0 then return -2 end
+        if connectionCount == 0 then
+            return {-2, -1}
+        end
 
         local heartbeatExists = redis.call('EXISTS', heartbeatKey)
-        if heartbeatExists == 0 then return -3 end
+        if heartbeatExists == 0 then
+            return {-3, -1}
+        end
 
         local latitude = redis.call('HGET', locationKey, 'latitude')
         local longitude = redis.call('HGET', locationKey, 'longitude')
-        if not latitude or not longitude then return -4 end
+        if not latitude or not longitude then
+            return {-4, -1}
+        end
 
         local state = redis.call('HGET', stateKey, 'state')
-        if state ~= busyState and state ~= offlineState then return -5 end
+        if not state then
+            state = offlineState
+        end
+
+        if state ~= busyState and state ~= offlineState then
+            return {-5, tonumber(state)}
+        end
 
         redis.call('HSET', stateKey, 'state', availableState, 'updatedAtUtc', updatedAt)
         redis.call('GEOADD', availableLocationsKey, longitude, latitude, driverId)
 
-        return 1
+        return {1, tonumber(state)}
         """;
 
     public const string SetOffline = """

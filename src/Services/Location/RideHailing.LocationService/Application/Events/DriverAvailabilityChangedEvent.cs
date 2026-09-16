@@ -2,5 +2,5 @@
 
 namespace RideHailing.LocationService.Application.Events;
 
-public sealed record DriverAvailabilityChangedEvent(Guid DriverId,DriverOperationalState PreviousState,
-    DriverOperationalState CurrentState,DateTime OccurredAtUtc) : IDriverEvent;
+public sealed record DriverAvailabilityChangedEvent(Guid EventId, Guid DriverId, DriverOperationalState PreviousState,
+    DriverOperationalState CurrentState, DateTime OccurredAtUtc) : IDriverEvent;

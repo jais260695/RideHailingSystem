@@ -4,6 +4,7 @@ public sealed class OutboxMessage
 {
     public Guid Id { get; set; }
 
+    public Guid EventId { get; set; }
     public string EventType { get; set; } = null!;
 
     public string AggregateType { get; set; } = null!;

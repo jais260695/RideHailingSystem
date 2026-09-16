@@ -17,6 +17,8 @@ public static class DriverEventSerializer
         {
             Id = Guid.NewGuid(),
 
+            EventId = message.EventId,
+
             EventType = typeof(T).Name,
 
             AggregateType = "Driver",

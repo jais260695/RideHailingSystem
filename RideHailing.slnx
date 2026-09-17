@@ -2,7 +2,10 @@
   <Folder Name="/Solution Items/">
     <File Path="docker-compose.yml" />
   </Folder>
-  <Folder Name="/src/" />
+  <Folder Name="/src/">
+    <Project Path="src/RideHailing.Contracts/RideHailing.Contracts.csproj" />
+    <Project Path="src/RideHailing.DriverMatching/RideHailing.DriverMatching.csproj" />
+  </Folder>
   <Folder Name="/src/ApiGateway/">
     <Project Path="src/ApiGateway/RideHailing.ApiGateway/RideHailing.ApiGateway.csproj" />
   </Folder>

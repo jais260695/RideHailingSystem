@@ -36,7 +36,7 @@ public sealed class OutboxPublisherWorker(IServiceScopeFactory scopeFactory, ILo
         {
             try
             {
-                await publisher.PublishRawAsync("driver.events", message.AggregateId, message.EventType, message.Payload, cancellationToken);
+                await publisher.PublishRawAsync("driver.events", message.AggregateId, message.EventType, message.Payload, message.EventId, cancellationToken);
                 await repository.MarkPublishedAsync(message.Id, cancellationToken);
             }
             catch (Exception ex)
